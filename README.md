@@ -133,9 +133,7 @@ Options:
    --task-ids TASK_IDS                    		用于进度监控的任务 ID
    --task-interval TASK_INTERVAL          		任务查询间隔（秒）
    --notify-urls NOTIFY_URLS              		Apprise 通知 URL，逗号分隔
-   --disable-task-notify                  		关闭任务完成通知
-   --no-color                             		禁用彩色日志输出
-   -v, --verbose                          		显示详细调试日志	
+   --disable-task-notify                  		关闭任务完成通知	
    -h, --help                             		显示此帮助信息并退出
 ```
 
@@ -154,10 +152,10 @@ python bilibili.py \
 ## 📦 打包 EXE
 
 ```bash
-python build.py               # 开发模式（onedir）
-python build.py --release     # 发布模式（onefile）
-python build.py --target gui  # 仅打包 GUI
-python build.py --target cli  # 仅打包 CLI
+python build.py               # 开发模式
+python build.py --target gui  # PyInstaller 打包 GUI
+python build.py --target cli  # PyInstaller 打包 CLI
+python build_nuitka.py --target gui  # Nuitka 轻量打包 GUI
 ```
 
 ## 🧩 配置文件
