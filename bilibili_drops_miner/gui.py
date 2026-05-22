@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import queue
 import re
 import sys
@@ -622,19 +623,54 @@ class MinerGUI(QMainWindow):
 
     @staticmethod
     def _find_browser(name: str) -> bool:
-        if name == "edge":
-            paths = [
-                r"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-                r"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
-            ]
+        if sys.platform == "darwin":
+            if name == "edge":
+                paths = [
+                    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+                ]
+            else:
+                paths = [
+                    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+                    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+                ]
+        elif sys.platform == "win32":
+            if name == "edge":
+                paths = [
+                    r"C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+                    r"C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+                ]
+            else:
+                paths = [
+                    r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+                    r"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+                    os.path.expandvars(
+                        r"%LOCALAPPDATA%\\Google\\Chrome\Application\\chrome.exe"
+                    ),
+                ]
         else:
-            paths = [
-                r"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-                r"C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
-                os.path.expandvars(
-                    r"%LOCALAPPDATA%\\Google\\Chrome\Application\\chrome.exe"
-                ),
-            ]
+            if name == "edge":
+                candidates = (
+                    "microsoft-edge",
+                    "microsoft-edge-stable",
+                    "/usr/bin/microsoft-edge",
+                    "/usr/bin/microsoft-edge-stable",
+                )
+            else:
+                candidates = (
+                    "google-chrome",
+                    "google-chrome-stable",
+                    "chromium",
+                    "chromium-browser",
+                    "/usr/bin/google-chrome",
+                    "/usr/bin/chromium",
+                )
+            for candidate in candidates:
+                if candidate.startswith("/"):
+                    if os.path.exists(candidate):
+                        return True
+                elif shutil.which(candidate):
+                    return True
+            return False
         return any(os.path.exists(p) for p in paths)
 
     @staticmethod
