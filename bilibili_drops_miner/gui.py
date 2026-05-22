@@ -177,7 +177,7 @@ class MinerGUI(QMainWindow):
         self.rooms_edit = self._make_line_edit("必填: 直播间号，多个用逗号分隔")
         self.rooms_edit.setText("23612045")
         self.task_ids_edit = self._make_line_edit("可留空: F12 从 totalv2 请求中提取 task_ids")
-        self.notify_urls_edit = self._make_line_edit("可留空: Apprise URL，如 gotify://host/token")
+        self.notify_urls_edit = self._make_line_edit("可留空: 通知 URL，如 gotify://host/token")
 
         config_layout.addLayout(
             self._build_labeled_row(
