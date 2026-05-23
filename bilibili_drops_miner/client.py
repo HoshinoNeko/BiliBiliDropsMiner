@@ -58,15 +58,15 @@ class TaskProgress:
 
     @property
     def is_completed(self) -> bool:
-        # Bilibili task status uses positive values for completed/claimable states.
-        if self.status >= 2:
-            return True
         try:
-            return float(self.limit_value) > 0 and float(self.cur_value) >= float(
-                self.limit_value
-            )
-        except Exception:
-            return False
+            limit = float(self.limit_value)
+            cur = float(self.cur_value)
+            if limit > 0:
+                return cur >= limit
+        except (TypeError, ValueError):
+            pass
+        # 无可用进度指标时，仅信任明确的终态（已领取等）。
+        return self.status in (3, 6)
 
 
 @dataclass(slots=True)
@@ -98,6 +98,72 @@ class MissionRewardClaimResult:
     success: bool
     skipped: bool
     code: int | str | None = None
+
+
+def _coerce_task_number(value: Any) -> int | float:
+    if value is None:
+        return 0
+    if isinstance(value, (int, float)):
+        return value
+    text = str(value).strip()
+    if not text:
+        return 0
+    try:
+        number = float(text)
+    except ValueError:
+        return 0
+    if number.is_integer():
+        return int(number)
+    return number
+
+
+def _extract_task_indicator_values(
+    indicators: Any,
+) -> tuple[int | float, int | float]:
+    if isinstance(indicators, dict):
+        candidates = [indicators]
+    elif isinstance(indicators, list):
+        candidates = [item for item in indicators if isinstance(item, dict)]
+    else:
+        return 0, 0
+
+    watch_types = {"watch_time", "watch", "live_watch", "duration", "live_time"}
+    best_cur: int | float = 0
+    best_limit: int | float = 0
+    watch_cur: int | float = 0
+    watch_limit: int | float = 0
+
+    for indicator in candidates:
+        indicator_type = str(
+            indicator.get("type")
+            or indicator.get("indicator_type")
+            or indicator.get("indicator_id")
+            or ""
+        ).lower()
+        cur_value = _coerce_task_number(
+            indicator.get("cur_value")
+            or indicator.get("cur")
+            or indicator.get("current")
+            or indicator.get("progress")
+        )
+        limit_value = _coerce_task_number(
+            indicator.get("limit")
+            or indicator.get("target")
+            or indicator.get("total")
+            or indicator.get("max")
+            or indicator.get("max_value")
+        )
+        if indicator_type in watch_types:
+            if limit_value >= watch_limit:
+                watch_cur = cur_value
+                watch_limit = limit_value
+        elif limit_value >= best_limit:
+            best_cur = cur_value
+            best_limit = limit_value
+
+    if watch_limit > 0:
+        return watch_cur, watch_limit
+    return best_cur, best_limit
 
 
 class BilibiliClient:
@@ -780,14 +846,22 @@ class BilibiliClient:
         for item in task_list:
             task_id = str(item.get("task_id") or "")
             task_name = str(item.get("task_name") or task_id)
-            status = int(item.get("task_status") or 0)
-            indicators = item.get("indicators") or []
-            cur_value: int | float = 0
-            limit_value: int | float = 0
-            if indicators and isinstance(indicators[0], dict):
-                indicator = indicators[0]
-                cur_value = indicator.get("cur_value") or 0
-                limit_value = indicator.get("limit") or 0
+            status = int(item.get("task_status") or item.get("status") or 0)
+            cur_value, limit_value = _extract_task_indicator_values(
+                item.get("indicators")
+            )
+            if limit_value <= 0:
+                limit_value = _coerce_task_number(
+                    item.get("limit")
+                    or item.get("target")
+                    or item.get("total")
+                )
+            if cur_value <= 0:
+                cur_value = _coerce_task_number(
+                    item.get("cur_value")
+                    or item.get("cur")
+                    or item.get("progress")
+                )
             progresses.append(
                 TaskProgress(
                     task_id=task_id,

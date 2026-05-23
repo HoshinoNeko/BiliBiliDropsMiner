@@ -720,6 +720,153 @@ class MinerGUI(QMainWindow):
         return any(os.path.exists(p) for p in paths)
 
     @staticmethod
+    def _detect_default_browser() -> str | None:
+        if sys.platform == "win32":
+            progids: list[str] = []
+            try:
+                import winreg
+
+                for scheme in ("https", "http"):
+                    try:
+                        with winreg.OpenKey(
+                            winreg.HKEY_CURRENT_USER,
+                            rf"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\{scheme}\UserChoice",
+                        ) as key:
+                            progids.append(
+                                winreg.QueryValueEx(key, "ProgId")[0].lower()
+                            )
+                    except OSError:
+                        continue
+            except Exception:
+                progids = []
+
+            for progid in progids:
+                if "chrome" in progid and "edge" not in progid:
+                    return "chrome"
+                if "edge" in progid or "msedge" in progid:
+                    return "edge"
+            return None
+
+        if sys.platform == "darwin":
+            try:
+                import subprocess
+
+                result = subprocess.run(
+                    [
+                        "defaults",
+                        "read",
+                        "com.apple.LaunchServices/com.apple.launchservices.secure",
+                        "LSHandlers",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                text = result.stdout.lower()
+                if "google.chrome" in text or "com.google.chrome" in text:
+                    return "chrome"
+                if "microsoft edge" in text or "com.microsoft.edgemac" in text:
+                    return "edge"
+            except Exception:
+                pass
+            return None
+
+        for cmd in (
+            ["xdg-settings", "get", "default-web-browser"],
+            ["xdg-mime", "query", "default", "x-scheme-handler/https"],
+        ):
+            try:
+                import subprocess
+
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                progid = result.stdout.strip().lower()
+                if not progid:
+                    continue
+                if "chrome" in progid or "chromium" in progid:
+                    return "chrome"
+                if "edge" in progid or "microsoft-edge" in progid:
+                    return "edge"
+            except Exception:
+                continue
+        return None
+
+    @staticmethod
+    def _available_browsers() -> list[str]:
+        return [
+            browser
+            for browser in ("chrome", "edge")
+            if MinerGUI._find_browser(browser)
+        ]
+
+    @staticmethod
+    def _browser_label(browser: str) -> str:
+        return {"chrome": "Google Chrome", "edge": "Microsoft Edge"}.get(
+            browser, browser
+        )
+
+    def _pick_browser(self) -> str | None:
+        available = self._available_browsers()
+        if not available:
+            self._show_warning("提示", "未检测到 Chrome 或 Edge，请先安装浏览器。")
+            return None
+        if len(available) == 1:
+            return available[0]
+
+        default = self._detect_default_browser()
+        if default not in available:
+            default = available[0]
+
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle("选择浏览器")
+        msg.setText(
+            f"检测到系统默认浏览器为 {self._browser_label(default)}。\n"
+            "请选择用于自动获取的浏览器："
+        )
+
+        default_btn = msg.addButton(
+            f"默认 ({self._browser_label(default)})",
+            QMessageBox.AcceptRole,
+        )
+        other_buttons: dict = {}
+        for browser in available:
+            if browser == default:
+                continue
+            button = msg.addButton(
+                self._browser_label(browser),
+                QMessageBox.ActionRole,
+            )
+            other_buttons[button] = browser
+        cancel_btn = msg.addButton("取消", QMessageBox.RejectRole)
+
+        msg.exec()
+        clicked = msg.clickedButton()
+        if clicked is None or clicked == cancel_btn:
+            return None
+        if clicked == default_btn:
+            return default
+        return other_buttons.get(clicked, default)
+
+    @staticmethod
+    def _browser_try_order(preferred: str | None) -> tuple[str, ...]:
+        available = MinerGUI._available_browsers()
+        if not available:
+            return ()
+        if preferred and preferred in available:
+            return (preferred, *[b for b in available if b != preferred])
+        default = MinerGUI._detect_default_browser()
+        if default in available:
+            return (default, *[b for b in available if b != default])
+        return tuple(available)
+
+    @staticmethod
     def _extract_room_id_from_live_url(text: str) -> int | None:
         if not text:
             return None
@@ -756,6 +903,7 @@ class MinerGUI(QMainWindow):
         on_network_match=None,
         on_cookies=None,
         on_page_url=None,
+        browser_preference: str | None = None,
     ) -> None:
         def _do() -> None:
             server = None
@@ -1047,7 +1195,7 @@ class MinerGUI(QMainWindow):
                             f.write(relay_js)
 
                 last_exc = None
-                for _browser in ("edge", "chrome"):
+                for _browser in MinerGUI._browser_try_order(browser_preference):
                     if not MinerGUI._find_browser(_browser):
                         logging.getLogger(__name__).info("未检测到 %s，跳过", _browser)
                         continue
@@ -1088,7 +1236,9 @@ class MinerGUI(QMainWindow):
                     )
 
                 driver.get("https://www.bilibili.com/")
-                logging.getLogger(__name__).info(hint)
+                logging.getLogger(__name__).info(
+                    "%s（浏览器: %s）", hint, MinerGUI._browser_label(browser_type or "")
+                )
 
                 cookie_done = False
                 net_done = False
@@ -1187,17 +1337,17 @@ class MinerGUI(QMainWindow):
         ok = QMessageBox.question(
             self,
             "无需登录，自动获取房间号",
-            '<span style="color:red; font-weight:bold;">'
-            '仅支持 Edge/Chrome！<br>'
-            '仅支持 Edge/Chrome！<br>'
-            '仅支持 Edge/Chrome！'
-            '</span><br><br>'
-            '点击确定后会打开浏览器，请在 2 分钟内进入目标直播间，<br>'
-            '即可自动获取房间号。<br><br>'
-            '捕获成功后浏览器会自动关闭。',
+            "支持 Chrome / Edge，将优先使用系统默认浏览器。<br><br>"
+            "点击确定后选择浏览器，并在 2 分钟内进入目标直播间，<br>"
+            "即可自动获取房间号。<br><br>"
+            "捕获成功后浏览器会自动关闭。",
             QMessageBox.Ok | QMessageBox.Cancel,
         )
         if ok != QMessageBox.Ok:
+            return
+
+        browser = self._pick_browser()
+        if browser is None:
             return
 
         def on_room(room_id: int) -> None:
@@ -1208,24 +1358,25 @@ class MinerGUI(QMainWindow):
             None,
             "已打开浏览器，请进入目标直播间",
             on_page_url=on_room,
+            browser_preference=browser,
         )
 
     def auto_fetch_task_ids(self) -> None:
         ok = QMessageBox.question(
             self,
             "无需登录，自动获取任务ID",
-            '<span style="color:red; font-weight:bold;">'
-            '仅支持 Edge/Chrome！<br>'
-            '仅支持 Edge/Chrome！<br>'
-            '仅支持 Edge/Chrome！'
-            '</span><br><br>'
-            '点击确定后会打开浏览器，请在 2 分钟内：<br><br>'
-            '打开有当前任务的直播间即可自动获取任务ID和房间号，<br>'
-            '或手动点击页面上的「刷新任务」按钮。<br><br>'
-            '捕获成功后浏览器会自动关闭。',
+            "支持 Chrome / Edge，将优先使用系统默认浏览器。<br><br>"
+            "点击确定后选择浏览器，并在 2 分钟内：<br><br>"
+            "打开有当前任务的直播间即可自动获取任务ID和房间号，<br>"
+            "或手动点击页面上的「刷新任务」按钮。<br><br>"
+            "捕获成功后浏览器会自动关闭。",
             QMessageBox.Ok | QMessageBox.Cancel,
         )
         if ok != QMessageBox.Ok:
+            return
+
+        browser = self._pick_browser()
+        if browser is None:
             return
 
         def on_match(payload):
@@ -1255,23 +1406,24 @@ class MinerGUI(QMainWindow):
             "/x/task/totalv2",
             "已打开浏览器，请打开有当前任务的直播间或点击刷新任务",
             on_network_match=on_match,
+            browser_preference=browser,
         )
 
     def auto_fetch_cookie(self) -> None:
         ok = QMessageBox.question(
             self,
             "自动获取Cookie",
-            '<span style="color:red; font-weight:bold;">'
-            '仅支持 Edge/Chrome！<br>'
-            '仅支持 Edge/Chrome！<br>'
-            '仅支持 Edge/Chrome！'
-            '</span><br><br>'
-            '点击确定后会打开浏览器，请在 2 分钟内登录 B 站，<br>'
-            '进入任意页面后即可自动获取 Cookie。<br><br>'
-            '捕获成功后浏览器会自动关闭。',
+            "支持 Chrome / Edge，将优先使用系统默认浏览器。<br><br>"
+            "点击确定后选择浏览器，并在 2 分钟内登录 B 站，<br>"
+            "进入任意页面后即可自动获取 Cookie。<br><br>"
+            "捕获成功后浏览器会自动关闭。",
             QMessageBox.Ok | QMessageBox.Cancel,
         )
         if ok != QMessageBox.Ok:
+            return
+
+        browser = self._pick_browser()
+        if browser is None:
             return
 
         def on_cookies(cookies: list):
@@ -1292,6 +1444,7 @@ class MinerGUI(QMainWindow):
             None,
             "已打开浏览器，正在获取 Cookie…",
             on_cookies=on_cookies,
+            browser_preference=browser,
         )
 
     def _schedule_task_refresh(self) -> None:
