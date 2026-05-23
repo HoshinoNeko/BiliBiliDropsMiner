@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -35,7 +36,11 @@ from bilibili_drops_miner.client import BilibiliClient
 from bilibili_drops_miner.config import MinerConfig
 from bilibili_drops_miner.logging_utils import setup_logging
 from bilibili_drops_miner.miner import BilibiliWatchTimeMiner
-from bilibili_drops_miner.utils import parse_room_ids, parse_task_ids
+from bilibili_drops_miner.utils import (
+    extract_bili_live_task_groups,
+    parse_room_ids,
+    parse_task_ids,
+)
 
 
 class QueueLogHandler(logging.Handler):
@@ -749,6 +754,62 @@ class MinerGUI(QMainWindow):
     def _apply_auto_task_ids(self, task_ids_str: str) -> None:
         self.task_ids_edit.setText(task_ids_str)
 
+    def _apply_selected_task_group(
+        self,
+        room_id: int | None,
+        task_groups: list[dict[str, object]],
+    ) -> None:
+        if room_id is not None and room_id > 0:
+            self._apply_auto_room_id(room_id)
+
+        if not task_groups:
+            self._show_warning("提示", "未从当前直播页解析到掉宝任务分组")
+            return
+
+        options = [
+            f"{str(group.get('label') or '任务组')} ({len(group.get('task_ids') or [])} 个任务)"
+            for group in task_groups
+        ]
+        default_index = 0
+        for index, group in enumerate(task_groups):
+            if bool(group.get("active")):
+                default_index = index
+                break
+
+        selected_option, ok = QInputDialog.getItem(
+            self,
+            "选择掉宝任务组",
+            "检测到多个按日期分组的掉宝任务，请选择要填入的一组：",
+            options,
+            default_index,
+            False,
+        )
+        if not ok:
+            logging.getLogger(__name__).info("用户取消了掉宝任务组选择")
+            return
+
+        try:
+            selected_index = options.index(selected_option)
+        except ValueError:
+            selected_index = default_index
+
+        selected_group = task_groups[selected_index]
+        task_ids = [
+            str(task_id).strip()
+            for task_id in (selected_group.get("task_ids") or [])
+            if str(task_id).strip()
+        ]
+        if not task_ids:
+            self._show_warning("提示", "所选分组中没有可用的任务 ID")
+            return
+
+        self._apply_auto_task_ids(",".join(task_ids))
+        logging.getLogger(__name__).info(
+            "任务ID获取成功: %s -> %s",
+            selected_group.get("label") or f"任务组 {selected_index + 1}",
+            ",".join(task_ids),
+        )
+
     def _browser_sniff(
         self,
         url_keyword: str | None,
@@ -756,6 +817,7 @@ class MinerGUI(QMainWindow):
         on_network_match=None,
         on_cookies=None,
         on_page_url=None,
+        on_page_html=None,
     ) -> None:
         def _do() -> None:
             server = None
@@ -775,6 +837,7 @@ class MinerGUI(QMainWindow):
                 need_net = bool(url_keyword and on_network_match)
                 need_cookie = on_cookies is not None
                 need_url = on_page_url is not None
+                need_html = on_page_html is not None
 
                 net_captured: list = []
                 cookie_captured: list = []
@@ -1093,6 +1156,7 @@ class MinerGUI(QMainWindow):
                 cookie_done = False
                 net_done = False
                 url_done = False
+                html_done = False
                 last_cookie_count = 0
                 for i in range(120):
                     if need_cookie and not cookie_done and cookie_captured:
@@ -1142,10 +1206,24 @@ class MinerGUI(QMainWindow):
                                 logging.getLogger(__name__).exception("on_page_url 回调失败")
                             url_done = True
 
+                    if need_html and not html_done:
+                        try:
+                            cur_url = driver.current_url or ""
+                        except Exception:
+                            cur_url = ""
+                        room_id = MinerGUI._extract_room_id_from_live_url(cur_url)
+                        if room_id is not None:
+                            try:
+                                page_html = driver.page_source or ""
+                                html_done = bool(on_page_html(page_html, cur_url))
+                            except Exception:
+                                logging.getLogger(__name__).exception("页面源码回调失败")
+
                     if (
                         (not need_cookie or cookie_done)
                         and (not need_net or net_done)
                         and (not need_url or url_done)
+                        and (not need_html or html_done)
                     ):
                         break
 
@@ -1228,34 +1306,20 @@ class MinerGUI(QMainWindow):
         if ok != QMessageBox.Ok:
             return
 
-        def on_match(payload):
-            payload_data = payload if isinstance(payload, dict) else {}
-            request_url = str(payload_data.get("url") or "")
-            page_url = str(payload_data.get("page_url") or "")
+        def on_page_html(page_html: str, page_url: str) -> bool:
             room_id = self._extract_room_id_from_live_url(page_url)
-            if room_id is None:
-                room_id = self._extract_room_id_from_live_url(request_url)
-            if room_id is not None:
-                self._post_ui_task(self._apply_auto_room_id, room_id)
-                logging.getLogger(__name__).info("房间号获取成功: %s", room_id)
-
-            data = payload_data.get("data")
-            if not isinstance(data, dict):
-                raise ValueError("task response payload invalid")
-            if data.get("code") != 0:
-                raise ValueError("response code != 0")
-            tasks = data.get("data", {}).get("list", [])
-            task_ids = [t.get("task_id") for t in tasks if t.get("task_id")]
-            if not task_ids:
-                raise ValueError("empty task list")
-            self._post_ui_task(self._apply_auto_task_ids, ",".join(task_ids))
-            logging.getLogger(__name__).info("任务ID获取成功: %s", ",".join(task_ids))
+            task_groups = extract_bili_live_task_groups(page_html)
+            if not task_groups:
+                return False
+            self._post_ui_task(self._apply_selected_task_group, room_id, task_groups)
+            return True
 
         self._browser_sniff(
-            "/x/task/totalv2",
-            "已打开浏览器，请打开有当前任务的直播间或点击刷新任务",
-            on_network_match=on_match,
+            None,
+            "已打开浏览器，请打开有当前任务的直播间并等待页面加载完成",
+            on_page_html=on_page_html,
         )
+        return
 
     def auto_fetch_cookie(self) -> None:
         ok = QMessageBox.question(
