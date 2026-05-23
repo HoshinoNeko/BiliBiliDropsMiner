@@ -3,6 +3,14 @@ name: Build & Release
 on:
   push:
     branches: [main, dev]
+    paths:
+      - '.github/workflows/build.yml'
+      - 'requirements.txt'
+      - 'build_nuitka.py'
+      - 'bilibili.py'
+      - 'bilibili_gui.py'
+      - 'bilibili_drops_miner/**'
+      - 'img/app.ico'
   workflow_dispatch:
     inputs:
       release:
@@ -15,39 +23,61 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: gui
+            package: bilibili-drops-miner-gui
+          - target: cli
+            package: bilibili-drops-miner-cli
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
+        id: setup-python
         with:
           python-version: '3.12'
           cache: 'pip'
 
+      - name: Cache Nuitka and compiler output
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\Nuitka
+            ~\AppData\Local\ccache
+            dist-nuitka\*.build
+          key: ${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-nuitka-${{ matrix.target }}-${{ hashFiles('requirements.txt', 'build_nuitka.py', 'bilibili.py', 'bilibili_gui.py', 'bilibili_drops_miner/**/*.py') }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-nuitka-${{ matrix.target }}-
+            ${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-nuitka-
+
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install nuitka ordered-set zstandard
+          python -m pip install --disable-pip-version-check -r requirements.txt
+          python -m pip install --disable-pip-version-check nuitka ordered-set zstandard
 
       - name: Build EXE with Nuitka
-        run: python build_nuitka.py --target all
+        run: python build_nuitka.py --target ${{ matrix.target }}
 
-      - name: Package ZIP files
+      - name: Package ZIP file
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path dist-nuitka/bilibili-drops-miner-gui -DestinationPath dist/bilibili-drops-miner-gui.zip -Force
-          Compress-Archive -Path dist-nuitka/bilibili-drops-miner-cli -DestinationPath dist/bilibili-drops-miner-cli.zip -Force
+          Compress-Archive -Path "dist-nuitka/${{ matrix.package }}" -DestinationPath "dist/${{ matrix.package }}.zip" -CompressionLevel Fastest -Force
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bilibili-drops-miner
-          path: |
-            dist/bilibili-drops-miner-gui.zip
-            dist/bilibili-drops-miner-cli.zip
+          name: ${{ matrix.package }}
+          path: dist/${{ matrix.package }}.zip
           retention-days: 30
 
   release:
@@ -61,8 +91,9 @@ jobs:
   
       - uses: actions/download-artifact@v4
         with:
-          name: bilibili-drops-miner
+          pattern: bilibili-drops-miner-*
           path: dist/
+          merge-multiple: true
   
       - name: Determine tag
         id: tag
