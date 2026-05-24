@@ -6,13 +6,20 @@
 - [Release 下载](https://github.com/mi0e/BiliBiliDropsMiner/releases/latest)
 - [国内下载（密码 1234）](https://wwaqd.lanzoum.com/b019vsjd5i)
 
+## 🎈 界面预览
+
+<details>
+<summary>点击展开 GUI 截图</summary>
+
 ![GUI 截图](img/image_5.png)
+
+</details>
 
 ## 🛠️ 功能
 
 - 多房间并发挂机，支持每房间多会话连接
 - 任务进度自动轮询 + 手动刷新
-- 支持 Apprise 多平台通知（企业微信、Gotify、Server 酱等）
+- 支持 Gotify、Server 酱通知
 - GUI 支持配置保存/加载、日志查看、自动获取 Cookie 与任务 ID
 
 ## ⚠️ 免责声明
@@ -29,13 +36,6 @@
 > - Please respect copyright and platform ToS
 
 ## 🔍 参数获取指南
-
-> [!WARNING]
-> 所有自动获取功能仅支持 Edge/Chrome！！！
-> 
-> 所有自动获取功能仅支持 Edge/Chrome！！！
-> 
-> 所有自动获取功能仅支持 Edge/Chrome！！！
 
 ### Cookie（必填）
 
@@ -63,15 +63,38 @@ https://api.bilibili.com/x/task/totalv2?csrf=xxx&task_ids=taskId1,taskId2
 
 ### 通知推送（可选）
 
-项目基于 [Apprise](https://github.com/caronc/apprise)，支持 80+ 通知渠道。
-
 常见格式：
 
-- 企业微信: `wxwork://corpid/agentid/secret/?to=@all`
 - Gotify: `gotify://host/token`
 - Server 酱: `schan://SendKey`
 
 多个通知地址可用逗号分隔。
+
+## 常见问题
+
+### Q：为什么点击“自动获取”后没有拉起浏览器？
+
+“自动获取”功能仅支持拉起典型安装路径下的 Chrome / Edge 浏览器。
+
+如果浏览器安装在自定义路径，可能无法被自动识别或启动。
+
+---
+
+### Q：为什么首次使用“自动获取”会比较慢？
+
+Selenium Manager 会自动下载缺失的浏览器驱动。
+
+首次使用“自动获取”功能时，可能因下载驱动而耗时较久；若网络异常，也可能导致下载失败，进而无法启动浏览器。
+
+---
+
+### Q：线程数是不是越高越好？
+
+不是。
+
+线程数过高，或频繁开启 / 关闭任务，可能触发平台风控，导致请求受限或任务失败。
+
+受个人网络环境差异及 B 站流控规则影响，加速效果存在软上限，建议根据实际情况调整线程数，推荐 60~80 线程。
 
 ## 🚀 快速开始
 
@@ -120,7 +143,7 @@ python bilibili_gui.py
 - 获取命令帮助：`python bilibili.py --help`
 
 ```shell
-Bilibili Watch-Time Miner
+Bilibili Drops Miner
 
 Usage: python bilibili.py [OPTIONS]
 
@@ -132,7 +155,7 @@ Options:
    --disable-web-heartbeat                		关闭 x25Kn 业务心跳
    --task-ids TASK_IDS                    		用于进度监控的任务 ID
    --task-interval TASK_INTERVAL          		任务查询间隔（秒）
-   --notify-urls NOTIFY_URLS              		Apprise 通知 URL，逗号分隔
+   --notify-urls NOTIFY_URLS              		通知 URL，逗号分隔
    --disable-task-notify                  		关闭任务完成通知	
    -h, --help                             		显示此帮助信息并退出
 ```
@@ -162,6 +185,7 @@ python build_nuitka.py --target gui  # Nuitka 轻量打包 GUI
 
 GUI 支持保存/加载 JSON 配置文件，格式可参考 config.example.json。
 
+
 ## 🧑‍💻 开发
 
 安装开发依赖：
@@ -182,3 +206,5 @@ pip install -r requirements.txt
 ## 📄 License
 
 MIT
+
+## 🥰 通过[爱发电](https://afdian.com/a/eriiiii)赞助
