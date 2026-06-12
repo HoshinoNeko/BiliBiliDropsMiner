@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>哔哩哔哩直播掉宝助手</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #0d0f14; --surface: #141720; --surface2: #1a1e2b; --surface3: #1f2435;
+  --border: #252a3a; --border2: #363d54;
+  --text: #e4e7f0; --text2: #8a91aa; --text3: #4f566b;
+  --pink: #fb7299; --pink-dim: #c75a77;
+  --blue: #4f8cff; --blue-dim: #2d5ccc;
+  --green: #3dce8a; --green-dim: #219e64;
+  --red: #ff5e5e; --red-dim: #cc3030;
+  --amber: #f5a623; --purple: #9b6dff;
+  --font-mono: 'JetBrains Mono','Consolas','Courier New',monospace;
+  --r: 10px; --rs: 6px; --shadow: 0 4px 24px rgba(0,0,0,.5);
+}
+html { font-size: 14px; }
+body { background: var(--bg); color: var(--text);
+  font-family: 'Inter','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  line-height: 1.5; min-height: 100vh; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+/* ── Shell ── */
+.shell { display:grid; grid-template-columns:260px 1fr; grid-template-rows:52px 1fr; height:100vh; overflow:hidden; }
+
+/* ── Topbar ── */
+.topbar { grid-column:1/-1; display:flex; align-items:center; gap:12px; padding:0 20px;
+  background:var(--surface); border-bottom:1px solid var(--border); z-index:10; }
+.logo-mark { width:30px; height:30px; border-radius:8px; background:rgba(251,114,153,.12);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.logo-mark svg { display:block; }
+.topbar-title { font-size:15px; font-weight:700; color:var(--pink); }
+.topbar-sub { font-size:11px; color:var(--text3); }
+.topbar-space { flex:1; }
+.conn-badge { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2);
+  padding:4px 10px; background:var(--surface2); border-radius:20px; border:1px solid var(--border); }
+.conn-dot { width:7px; height:7px; border-radius:50%; background:var(--text3); flex-shrink:0; }
+.conn-dot.ok { background:var(--green); box-shadow:0 0 5px var(--green); }
+.conn-dot.err { background:var(--red); }
+
+/* ── Sidebar ── */
+.sidebar { background:var(--surface); border-right:1px solid var(--border);
+  display:flex; flex-direction:column; overflow:hidden; }
+.sb-head { padding:12px 14px 10px; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; }
+.sb-label { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text3); }
+.icon-btn { background:none; border:none; cursor:pointer; width:26px; height:26px;
+  border-radius:var(--rs); display:flex; align-items:center; justify-content:center;
+  color:var(--text2); transition:background .15s,color .15s; }
+.icon-btn:hover { background:var(--surface2); color:var(--text); }
+.acc-list { flex:1; overflow-y:auto; padding:6px; }
+.acc-item { padding:9px 10px; border-radius:var(--rs); cursor:pointer;
+  display:flex; align-items:center; gap:9px; transition:background .12s; margin-bottom:2px; user-select:none; }
+.acc-item:hover { background:var(--surface2); }
+.acc-item.active { background:var(--surface3); }
+.acc-av { width:33px; height:33px; border-radius:50%; background:var(--surface3);
+  border:2px solid var(--border); display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:700; color:var(--pink); flex-shrink:0; position:relative; }
+.acc-av .rb { position:absolute; bottom:-1px; right:-1px; width:10px; height:10px;
+  border-radius:50%; background:var(--green); border:2px solid var(--surface); }
+.acc-info { flex:1; min-width:0; }
+.acc-name { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.acc-meta { font-size:11px; color:var(--text3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.acc-badge { font-size:10px; padding:2px 6px; border-radius:3px; font-weight:600; flex-shrink:0; }
+.badge-running { background:rgba(61,206,138,.15); color:var(--green); }
+.badge-stopped { background:rgba(79,90,115,.12); color:var(--text3); }
+.badge-error   { background:rgba(255,94,94,.15);  color:var(--red); }
+.sb-foot { padding:10px; border-top:1px solid var(--border); display:flex; gap:6px; }
+
+/* ── Main ── */
+.main { display:flex; flex-direction:column; overflow:hidden; }
+.tabs { display:flex; align-items:center; gap:0; padding:0 18px;
+  background:var(--surface); border-bottom:1px solid var(--border); min-height:44px; }
+.tab { padding:10px 15px; font-size:13px; font-weight:500; cursor:pointer;
+  border-bottom:2px solid transparent; color:var(--text2); transition:color .12s,border-color .12s; }
+.tab:hover { color:var(--text); }
+.tab.active { color:var(--pink); border-bottom-color:var(--pink); }
+.content { flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:14px; }
+
+/* ── Empty ── */
+.empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:14px; color:var(--text3); padding:40px; }
+.empty svg { opacity:.25; }
+.empty p { font-size:13px; text-align:center; line-height:1.8; }
+
+/* ── Cards ── */
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:16px 18px; }
+.card-hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; }
+.card-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:var(--text2); }
+.card-title-line { display:flex; align-items:center; gap:7px; }
+.card-title-line::before { content:''; display:block; width:3px; height:15px; background:var(--pink); border-radius:2px; }
+
+/* ── Form ── */
+.fgrid { display:grid; grid-template-columns:1fr 1fr; gap:11px; }
+.fgrid.one { grid-template-columns:1fr; }
+.fg { display:flex; flex-direction:column; gap:4px; }
+.fg.full { grid-column:1/-1; }
+label.lbl { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); }
+label.lbl .req { color:var(--pink); margin-left:2px; }
+.hint { font-size:11px; color:var(--text3); margin-top:2px; line-height:1.5; }
+input[type=text], input[type=number], textarea {
+  background:var(--surface2); border:1px solid var(--border); border-radius:var(--rs);
+  color:var(--text); font-family:inherit; font-size:13px; padding:7px 11px;
+  outline:none; transition:border-color .15s, box-shadow .15s; width:100%; }
+input[type=text]:focus, input[type=number]:focus, textarea:focus {
+  border-color:var(--blue); box-shadow:0 0 0 2px rgba(79,140,255,.15); }
+input.mono, textarea.mono { font-family:var(--font-mono); font-size:12px; }
+textarea { resize:vertical; min-height:68px; }
+input::placeholder, textarea::placeholder { color:var(--text3); }
+input[type=number]::-webkit-inner-spin-button { opacity:.4; }
+.irow { display:flex; gap:7px; align-items:center; }
+.irow input { flex:1; }
+
+/* ── Toggles ── */
+.trow { display:flex; align-items:center; gap:8px; }
+.trow label { font-size:13px; color:var(--text2); cursor:pointer; font-weight:400;
+  text-transform:none; letter-spacing:0; }
+.tog { appearance:none; width:34px; height:19px; background:var(--border2); border-radius:10px;
+  cursor:pointer; position:relative; transition:background .18s; flex-shrink:0; }
+.tog::after { content:''; position:absolute; top:2.5px; left:2.5px; width:14px; height:14px;
+  border-radius:50%; background:var(--text2); transition:transform .18s,background .18s; }
+.tog:checked { background:var(--pink); }
+.tog:checked::after { transform:translateX(15px); background:#fff; }
+
+/* ── Buttons ── */
+.btn { display:inline-flex; align-items:center; gap:5px; padding:7px 14px;
+  border-radius:var(--rs); font-size:13px; font-weight:600; cursor:pointer; border:none;
+  transition:opacity .12s,transform .1s; white-space:nowrap; flex-shrink:0; font-family:inherit; }
+.btn:active { transform:scale(.97); }
+.btn:disabled { opacity:.38; cursor:not-allowed; transform:none; }
+.btn-pink   { background:var(--pink); color:#fff; }
+.btn-pink:hover:not(:disabled)  { background:var(--pink-dim); }
+.btn-green  { background:var(--green); color:#000; }
+.btn-green:hover:not(:disabled) { background:var(--green-dim); color:#fff; }
+.btn-red    { background:var(--red); color:#fff; }
+.btn-red:hover:not(:disabled)   { background:var(--red-dim); }
+.btn-blue   { background:var(--blue); color:#fff; }
+.btn-blue:hover:not(:disabled)  { background:var(--blue-dim); }
+.btn-ghost  { background:transparent; color:var(--text2); border:1px solid var(--border); }
+.btn-ghost:hover:not(:disabled) { background:var(--surface2); color:var(--text); }
+.btn-sm { padding:5px 11px; font-size:12px; }
+.btn-xs { padding:3px 8px; font-size:11px; }
+.brow { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+
+/* ── Progress strip ── */
+.pstrip { height:3px; border-radius:2px; background:var(--border); overflow:hidden; margin-top:11px; }
+.pstrip .fill { height:100%; border-radius:2px; background:linear-gradient(90deg,var(--pink),var(--blue)); width:0; transition:width .4s; }
+.pstrip .fill.ind { width:35%; animation:slide 1.4s ease-in-out infinite; }
+@keyframes slide { 0%{transform:translateX(-150%)} 100%{transform:translateX(450%)} }
+
+/* ── Stats ── */
+.stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.stat-c { background:var(--surface2); border:1px solid var(--border); border-radius:var(--rs); padding:12px 14px; }
+.stat-lbl { font-size:11px; color:var(--text3); margin-bottom:5px; }
+.stat-val { font-size:22px; font-weight:700; font-family:var(--font-mono); }
+.stat-val.pink { color:var(--pink); } .stat-val.green { color:var(--green); }
+.stat-val.blue { color:var(--blue); } .stat-val.amber { color:var(--amber); }
+
+/* ── Task cards ── */
+.tgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:9px; }
+.tc { background:var(--surface2); border:1px solid var(--border); border-radius:var(--rs);
+  padding:11px 13px; display:flex; flex-direction:column; gap:5px; }
+.tc-name { font-size:12px; font-weight:600; }
+.tc-bar { height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
+.tc-bar .fill { height:100%; background:var(--pink); border-radius:2px; transition:width .4s; }
+.tc-meta { display:flex; justify-content:space-between; }
+.tc-meta span { font-size:11px; color:var(--text3); }
+.tc-meta .done { color:var(--green); font-weight:600; }
+
+/* ── Log ── */
+.logwrap { background:#080a0f; border:1px solid var(--border); border-radius:var(--rs);
+  font-family:var(--font-mono); font-size:12px; line-height:1.65;
+  overflow-y:auto; padding:10px 13px; min-height:160px; max-height:420px; white-space: pre-wrap; }
+.ll { display:flex; gap:9px; }
+.lt { color:var(--text3); flex-shrink:0; }
+.lv { flex-shrink:0; font-weight:700; min-width:42px; text-align:right; }
+.lv.INFO  { color:var(--blue); }
+.lv.WARN  { color:var(--amber); }
+.lv.ERROR { color:var(--red); }
+.lv.DEBUG { color:var(--text3); }
+.lm { color:var(--text); word-break:break-all; }
+
+/* ── Notice ── */
+.notice { display:flex; align-items:flex-start; gap:9px; padding:9px 13px;
+  border-radius:var(--rs); font-size:12px; line-height:1.6; }
+.notice.info { background:rgba(79,140,255,.09); border:1px solid rgba(79,140,255,.22); color:#8ab4f8; }
+.notice.warn { background:rgba(245,166,35,.09);  border:1px solid rgba(245,166,35,.22);  color:#f5c35f; }
+.notice.err  { background:rgba(255,94,94,.09);   border:1px solid rgba(255,94,94,.22);   color:#ff9090; }
+
+/* ── Modal ── */
+.overlay { position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.65);
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; pointer-events:none; transition:opacity .18s; }
+.overlay.open { opacity:1; pointer-events:all; }
+.modal { background:var(--surface); border:1px solid var(--border2); border-radius:var(--r);
+  width:520px; max-width:calc(100vw - 28px); box-shadow:var(--shadow);
+  transform:translateY(10px); transition:transform .18s; max-height:90vh; overflow-y:auto; }
+.overlay.open .modal { transform:none; }
+.mhd { display:flex; align-items:center; justify-content:space-between;
+  padding:16px 18px 13px; border-bottom:1px solid var(--border); }
+.mhd-title { font-size:15px; font-weight:700; }
+.mbody { padding:18px; display:flex; flex-direction:column; gap:13px; }
+.mfoot { display:flex; gap:7px; justify-content:flex-end; padding:13px 18px;
+  border-top:1px solid var(--border); }
+#confirm-modal .modal { width:360px; }
+.confirm-msg { font-size:14px; color:var(--text2); line-height:1.7; }
+
+/* ── Toast ── */
+.toast-wrap { position:fixed; bottom:20px; right:20px; z-index:999; display:flex; flex-direction:column; gap:8px; }
+.toast { padding:10px 16px; border-radius:var(--rs); font-size:13px; font-weight:500;
+  box-shadow:var(--shadow); animation:toastin .2s ease; display:flex; align-items:center; gap:8px; }
+@keyframes toastin { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+.toast.ok   { background:var(--green); color:#000; }
+.toast.err  { background:var(--red);   color:#fff; }
+.toast.info { background:var(--blue);  color:#fff; }
+
+/* ── Loading spinner ── */
+.spinner { width:18px; height:18px; border:2.5px solid rgba(255,255,255,.2); border-top-color:#fff;
+  border-radius:50%; animation:spin .7s linear infinite; flex-shrink:0; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* ── Responsive ── */
+@media(max-width:880px) { .shell{grid-template-columns:220px 1fr} .stats{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:640px) { .shell{grid-template-columns:1fr} .sidebar{display:none} .fgrid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- Topbar -->
+<header class="topbar">
+  <div class="logo-mark">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M3 4h10M3 8h10M3 12h6" stroke="#fb7299" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="13" cy="12" r="2.2" fill="#3dce8a"/>
+    </svg>
+  </div>
+  <div>
+    <div class="topbar-title">哔哩哔哩直播掉宝助手</div>
+    <div class="topbar-sub">多账户 Web 版</div>
+  </div>
+  <div class="topbar-space"></div>
+  <div class="conn-badge">
+    <div class="conn-dot" id="conn-dot"></div>
+    <span id="conn-text">连接中…</span>
+  </div>
+</header>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sb-head">
+    <span class="sb-label">账户</span>
+    <button class="icon-btn" onclick="openAddModal()" title="添加账户">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+        <path d="M6.5 1v11M1 6.5h11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+  <div class="acc-list" id="acc-list"></div>
+  <div class="sb-foot">
+    <button class="btn btn-green btn-sm" style="flex:1" onclick="startAll()">全部启动</button>
+    <button class="btn btn-red btn-sm" style="flex:1" onclick="stopAll()">全部停止</button>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+  <div class="tabs" id="tabs" style="display:none">
+    <div class="tab active" data-tab="config" onclick="switchTab(this)">配置</div>
+    <div class="tab" data-tab="tasks" onclick="switchTab(this)">任务进度</div>
+    <div class="tab" data-tab="logs" onclick="switchTab(this)">运行日志</div>
+  </div>
+
+  <div class="content" id="content">
+
+    <!-- Empty state -->
+    <div class="empty" id="empty">
+      <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+        <rect x="6" y="10" width="44" height="36" rx="5" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M16 22h24M16 30h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <circle cx="43" cy="41" r="7" fill="#0d0f14" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M43 38v3l2 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <p>点击侧边栏 <strong>+</strong> 添加账户<br>选中账户后即可配置并启动挂机</p>
+      <button class="btn btn-pink" onclick="openAddModal()">添加第一个账户</button>
+    </div>
+
+    <!-- ── Config Tab ── -->
+    <div id="tab-config" class="tab-panel" style="display:none;flex-direction:column;gap:14px">
+
+      <!-- Action bar -->
+      <div class="card" style="padding:13px 16px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:15px;font-weight:700" id="d-name">—</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px" id="d-uid">UID: 未验证</div>
+          </div>
+          <button class="btn btn-green" id="btn-start" onclick="doStart()">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 1l8 4.5L2 10V1z" fill="currentColor"/></svg>
+            启动
+          </button>
+          <button class="btn btn-red" id="btn-stop" onclick="doStop()" disabled>停止</button>
+          <button class="btn btn-ghost btn-sm" onclick="doSave()">保存配置</button>
+          <button class="btn btn-ghost btn-sm" onclick="importCfg()">导入 JSON</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="doDelete()">删除账户</button>
+        </div>
+        <div class="pstrip" id="pstrip" style="display:none"><div class="fill ind"></div></div>
+      </div>
+
+      <!-- Cookie -->
+      <div class="card">
+        <div class="card-hd">
+          <div class="card-title-line"><span class="card-title">身份验证</span></div>
+        </div>
+        <div class="fg">
+          <label class="lbl">Cookie <span class="req">*</span></label>
+          <textarea class="mono" id="cfg-cookie" rows="2"
+            placeholder="SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx; buvid3=xxx"></textarea>
+          <div class="hint">F12 → Network → 找到任意 B站请求 → 请求头 Cookie 字段全部复制（需含 SESSDATA、bili_jct、DedeUserID）</div>
+        </div>
+      </div>
+
+      <!-- Rooms & Tasks -->
+      <div class="card">
+        <div class="card-hd"><div class="card-title-line"><span class="card-title">直播间 & 任务</span></div></div>
+        <div class="fgrid">
+          <div class="fg">
+            <label class="lbl">直播间号 <span class="req">*</span></label>
+            <input type="text" id="cfg-rooms" placeholder="23612045, 1017, 22608112（多个逗号分隔）">
+          </div>
+          <div class="fg">
+            <label class="lbl">任务 ID</label>
+            <input type="text" id="cfg-task-ids" placeholder="可留空，从 totalv2 请求提取或手动填写">
+          </div>
+        </div>
+      </div>
+
+      <!-- Params -->
+      <div class="card">
+        <div class="card-hd"><div class="card-title-line"><span class="card-title">运行参数</span></div></div>
+        <div class="fgrid">
+          <div class="fg">
+            <label class="lbl">线程数</label>
+            <input type="number" id="cfg-threads" value="1" min="1" max="32">
+          </div>
+          <div class="fg">
+            <label class="lbl">重连延迟（秒）</label>
+            <input type="number" id="cfg-reconnect" value="8" min="1" max="300">
+          </div>
+          <div class="fg">
+            <label class="lbl">任务查询间隔（秒）</label>
+            <input type="number" id="cfg-interval" value="30" min="10" max="3600">
+          </div>
+          <div class="fg">
+            <label class="lbl">通知 URL</label>
+            <input type="text" id="cfg-notify" placeholder="gotify://host/token（多个逗号分隔）">
+          </div>
+        </div>
+        <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px">
+          <div class="trow"><input type="checkbox" class="tog" id="cfg-verbose"><label for="cfg-verbose">详细日志 (DEBUG)</label></div>
+          <div class="trow"><input type="checkbox" class="tog" id="cfg-no-notify"><label for="cfg-no-notify">禁用任务完成通知</label></div>
+          <div class="trow"><input type="checkbox" class="tog" id="cfg-heartbeat" checked><label for="cfg-heartbeat">启用 Web 心跳</label></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ── Tasks Tab ── -->
+    <div id="tab-tasks" class="tab-panel" style="display:none;flex-direction:column;gap:14px">
+      <div class="card">
+        <div class="card-hd">
+          <div class="card-title-line"><span class="card-title">任务进度</span></div>
+          <div class="brow" style="margin:0">
+            <button class="btn btn-blue btn-sm" id="btn-claim" onclick="doClaim()">领取奖励</button>
+            <button class="btn btn-ghost btn-sm" id="btn-refresh-task" onclick="doRefreshTasks()">
+              <span>刷新</span>
+            </button>
+          </div>
+        </div>
+        <div class="stats" id="stats-row" style="margin-bottom:13px">
+          <div class="stat-c"><div class="stat-lbl">已完成任务</div><div class="stat-val green" id="st-done">—</div></div>
+          <div class="stat-c"><div class="stat-lbl">进行中任务</div><div class="stat-val blue"  id="st-prog">—</div></div>
+          <div class="stat-c"><div class="stat-lbl">任务总数</div><div class="stat-val pink"  id="st-total">—</div></div>
+          <div class="stat-c"><div class="stat-lbl">完成率</div><div class="stat-val amber" id="st-rate">—</div></div>
+        </div>
+        <div class="tgrid" id="task-grid">
+          <div style="color:var(--text3);font-size:13px;grid-column:1/-1">点击「刷新」获取实时任务进度</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><div class="card-title-line"><span class="card-title">原始输出</span></div></div>
+        <div class="logwrap" id="task-raw" style="color:var(--text2)">—</div>
+      </div>
+    </div>
+
+    <!-- ── Logs Tab ── -->
+    <div id="tab-logs" class="tab-panel" style="display:none;flex-direction:column;gap:14px">
+      <div class="card">
+        <div class="card-hd">
+          <div class="card-title-line"><span class="card-title">运行日志</span></div>
+          <div class="brow" style="margin:0;gap:10px">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer">
+              <input type="checkbox" id="autoscroll" checked style="accent-color:var(--pink)"> 自动滚动
+            </label>
+            <button class="btn btn-ghost btn-sm" onclick="clearLogs()">清空</button>
+            <button class="btn btn-ghost btn-sm" onclick="exportLogs()">导出</button>
+          </div>
+        </div>
+        <div class="logwrap" id="logwrap"></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</main>
+</div><!-- /shell -->
+
+<!-- Toast area -->
+<div class="toast-wrap" id="toast-wrap"></div>
+
+<!-- Add Account Modal -->
+<div class="overlay" id="add-modal" onclick="if(event.target===this)closeModal('add-modal')">
+  <div class="modal">
+    <div class="mhd">
+      <div class="mhd-title">添加账户</div>
+      <button class="icon-btn" onclick="closeModal('add-modal')">✕</button>
+    </div>
+    <div class="mbody">
+      <div class="notice info">账户名仅用于本地标识。Cookie 是必填项，其余参数稍后在配置页调整。</div>
+      <div class="fg"><label class="lbl">账户名称 <span class="req">*</span></label>
+        <input type="text" id="m-name" placeholder="例: 主号、小号1"></div>
+      <div class="fg"><label class="lbl">Cookie <span class="req">*</span></label>
+        <textarea class="mono" id="m-cookie" rows="3"
+          placeholder="SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx; buvid3=xxx"></textarea></div>
+      <div class="fg"><label class="lbl">直播间号 <span class="req">*</span></label>
+        <input type="text" id="m-rooms" placeholder="23612045, 1017, 22608112"></div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('add-modal')">取消</button>
+      <button class="btn btn-pink" onclick="submitAdd()">确认添加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="overlay" id="confirm-modal" onclick="if(event.target===this)closeModal('confirm-modal')">
+  <div class="modal">
+    <div class="mhd"><div class="mhd-title" id="cm-title">确认操作</div>
+      <button class="icon-btn" onclick="closeModal('confirm-modal')">✕</button></div>
+    <div class="mbody"><p class="confirm-msg" id="cm-msg"></p></div>
+    <div class="mfoot">
+      <button class="btn btn-ghost" onclick="closeModal('confirm-modal')">取消</button>
+      <button class="btn btn-red" id="cm-ok">确认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// Config
+// ═══════════════════════════════════════════════════════════
+const API = '';          // same origin
+const WS_BASE = `ws://${location.host}`;
+
+// ═══════════════════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════════════════
+let accounts = {};       // id -> account object from API
+let selectedId = null;
+let activeTab = 'config';
+let wsMap = {};          // id -> WebSocket
+let connected = false;
+
+// ═══════════════════════════════════════════════════════════
+// API helpers
+// ═══════════════════════════════════════════════════════════
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  if (!r.ok) {
+    const t = await r.text();
+    let msg = t;
+    try { msg = JSON.parse(t).detail || t; } catch {}
+    throw new Error(msg);
+  }
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Bootstrap
+// ═══════════════════════════════════════════════════════════
+async function init() {
+  try {
+    const list = await api('GET', '/api/accounts');
+    list.forEach(a => { accounts[a.id] = a; });
+    renderSidebar();
+    if (list.length > 0) selectAccount(list[0].id);
+    setConnState(true);
+    // Open WebSocket for all accounts
+    Object.keys(accounts).forEach(id => openWS(id));
+  } catch(e) {
+    setConnState(false);
+    toast('连接后端失败: ' + e.message, 'err');
+    setTimeout(init, 4000);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// WebSocket per-account
+// ═══════════════════════════════════════════════════════════
+function openWS(id) {
+  if (wsMap[id]) { try { wsMap[id].close(); } catch {} }
+  const ws = new WebSocket(`${WS_BASE}/ws/${id}`);
+  wsMap[id] = ws;
+
+  ws.onopen = () => {
+    setConnState(true);
+    // Keep-alive ping every 20s
+    ws._ping = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send('ping');
+    }, 20000);
+  };
+
+  ws.onmessage = (ev) => {
+    try { handleWsMsg(id, JSON.parse(ev.data)); } catch {}
+  };
+
+  ws.onerror = () => setConnState(false);
+  ws.onclose = () => {
+    clearInterval(ws._ping);
+    // Reconnect after 3s
+    setTimeout(() => { if (accounts[id]) openWS(id); }, 3000);
+  };
+}
+
+function handleWsMsg(id, msg) {
+  if (msg.type === 'pong') return;
+
+  if (msg.type === 'init') {
+    if (accounts[id]) {
+      accounts[id].status = msg.status;
+      accounts[id].uid    = msg.uid;
+      accounts[id].uname  = msg.uname;
+      // Populate log buffer from init snapshot
+      if (!accounts[id]._logs) accounts[id]._logs = [];
+      accounts[id]._logs = msg.logs || [];
+    }
+    renderSidebar();
+    if (id === selectedId) { updateActionBar(); if (activeTab === 'logs') renderLogs(); }
+    return;
+  }
+
+  if (msg.type === 'status') {
+    if (accounts[id]) {
+      accounts[id].status = msg.status;
+      accounts[id].uid    = msg.uid;
+      accounts[id].uname  = msg.uname;
+    }
+    renderSidebar();
+    if (id === selectedId) updateActionBar();
+    return;
+  }
+
+  if (msg.type === 'log') {
+    if (!accounts[id]) return;
+    if (!accounts[id]._logs) accounts[id]._logs = [];
+    const entries = msg.entries || [];
+    accounts[id]._logs.push(...entries);
+    if (accounts[id]._logs.length > 2000) accounts[id]._logs = accounts[id]._logs.slice(-2000);
+    if (id === selectedId && activeTab === 'logs') appendLogs(entries);
+    return;
+  }
+}
+
+function setConnState(ok) {
+  connected = ok;
+  document.getElementById('conn-dot').className = 'conn-dot ' + (ok ? 'ok' : 'err');
+  document.getElementById('conn-text').textContent = ok ? '已连接' : '断线重连…';
+}
+
+// ═══════════════════════════════════════════════════════════
+// Sidebar
+// ═══════════════════════════════════════════════════════════
+function renderSidebar() {
+  const list = document.getElementById('acc-list');
+  const accs = Object.values(accounts);
+  if (accs.length === 0) {
+    list.innerHTML = '<div style="padding:18px;text-align:center;color:var(--text3);font-size:12px">还没有账户<br>点击 + 添加</div>';
+    return;
+  }
+  list.innerHTML = '';
+  accs.forEach(acc => {
+    const el = document.createElement('div');
+    el.className = 'acc-item' + (acc.id === selectedId ? ' active' : '');
+    const badge = acc.status === 'running' ? '<div class="rb"></div>' : '';
+    const sl = {running:'运行中',stopped:'已停止',error:'错误'}[acc.status] || acc.status;
+    const sc = acc.status === 'running' ? 'badge-running' : acc.status === 'error' ? 'badge-error' : 'badge-stopped';
+    const av = esc((acc.name||'?')[0].toUpperCase());
+    const rooms = esc(acc.config?.room_ids || '');
+    el.innerHTML = `
+      <div class="acc-av">${av}${badge}</div>
+      <div class="acc-info">
+        <div class="acc-name">${esc(acc.name)}</div>
+        <div class="acc-meta">${rooms || '未设置房间'}</div>
+      </div>
+      <span class="acc-badge ${sc}">${sl}</span>`;
+    el.addEventListener('click', () => selectAccount(acc.id));
+    list.appendChild(el);
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// Select
+// ═══════════════════════════════════════════════════════════
+function selectAccount(id) {
+  selectedId = id;
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('tabs').style.display = 'flex';
+  document.querySelectorAll('.acc-item').forEach(el => {
+    el.classList.toggle('active', el.querySelector('.acc-name')?.textContent === accounts[id]?.name
+      && [...document.querySelectorAll('.acc-item')].indexOf(el) === Object.keys(accounts).indexOf(id));
+  });
+  // Simpler: rebuild sidebar
+  renderSidebar();
+  fillForm();
+  updateActionBar();
+  switchTab(document.querySelector(`.tab[data-tab="${activeTab}"]`), false);
+  renderLogs();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Tabs
+// ═══════════════════════════════════════════════════════════
+function switchTab(el, save=true) {
+  if (!el) return;
+  const tab = el.dataset.tab;
+  if (save) activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+  const panel = document.getElementById('tab-' + tab);
+  if (panel) panel.style.display = 'flex';
+}
+
+// ═══════════════════════════════════════════════════════════
+// Config form
+// ═══════════════════════════════════════════════════════════
+function fillForm() {
+  const acc = accounts[selectedId];
+  if (!acc) return;
+  const c = acc.config || {};
+  setv('cfg-cookie', c.cookie);
+  setv('cfg-rooms', c.room_ids);
+  setv('cfg-task-ids', c.task_ids);
+  setv('cfg-threads', c.thread_count ?? 1);
+  setv('cfg-reconnect', c.reconnect_delay_seconds ?? 8);
+  setv('cfg-interval', c.task_query_interval_seconds ?? 30);
+  setv('cfg-notify', c.notify_urls);
+  chk('cfg-verbose', !!c.verbose);
+  chk('cfg-no-notify', !c.notify_on_task_complete);
+  chk('cfg-heartbeat', c.enable_web_heartbeat !== false);
+}
+
+function readForm() {
+  return {
+    cookie:                     getv('cfg-cookie'),
+    room_ids:                   getv('cfg-rooms'),
+    task_ids:                   getv('cfg-task-ids'),
+    thread_count:               parseInt(getv('cfg-threads')) || 1,
+    reconnect_delay_seconds:    parseInt(getv('cfg-reconnect')) || 8,
+    task_query_interval_seconds:parseInt(getv('cfg-interval')) || 30,
+    notify_urls:                getv('cfg-notify'),
+    enable_web_heartbeat:       document.getElementById('cfg-heartbeat').checked,
+    verbose:                    document.getElementById('cfg-verbose').checked,
+    notify_on_task_complete:   !document.getElementById('cfg-no-notify').checked,
+  };
+}
+
+function updateActionBar() {
+  const acc = accounts[selectedId];
+  if (!acc) return;
+  document.getElementById('d-name').textContent = acc.name || '—';
+  const uid = acc.uid ? `UID: ${acc.uid}${acc.uname ? ' · ' + acc.uname : ''}` : 'UID: 未验证';
+  document.getElementById('d-uid').textContent = uid;
+  const running = acc.status === 'running';
+  document.getElementById('btn-start').disabled = running;
+  document.getElementById('btn-stop').disabled  = !running;
+  document.getElementById('pstrip').style.display = running ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+// Actions
+// ═══════════════════════════════════════════════════════════
+async function doStart() {
+  if (!selectedId) return;
+  // First save current form to server
+  await doSave(true);
+  try {
+    await api('POST', `/api/accounts/${selectedId}/start`);
+    toast('启动指令已发送', 'ok');
+  } catch(e) { toast('启动失败: ' + e.message, 'err'); }
+}
+
+async function doStop() {
+  if (!selectedId) return;
+  try {
+    await api('POST', `/api/accounts/${selectedId}/stop`);
+    toast('停止指令已发送', 'info');
+  } catch(e) { toast('停止失败: ' + e.message, 'err'); }
+}
+
+async function doSave(silent=false) {
+  if (!selectedId) return;
+  const cfg = readForm();
+  try {
+    const updated = await api('PUT', `/api/accounts/${selectedId}`, { config: cfg });
+    accounts[selectedId] = { ...accounts[selectedId], ...updated };
+    if (!silent) { toast('配置已保存', 'ok'); renderSidebar(); }
+  } catch(e) { if (!silent) toast('保存失败: ' + e.message, 'err'); throw e; }
+}
+
+async function doDelete() {
+  const acc = accounts[selectedId];
+  if (!acc) return;
+  confirm_(`删除账户「${acc.name}」？运行中的任务将被停止，此操作不可撤销。`, async () => {
+    try {
+      await api('DELETE', `/api/accounts/${selectedId}`);
+      if (wsMap[selectedId]) { wsMap[selectedId].close(); delete wsMap[selectedId]; }
+      delete accounts[selectedId];
+      selectedId = null;
+      renderSidebar();
+      showEmpty();
+      toast('账户已删除', 'ok');
+    } catch(e) { toast('删除失败: ' + e.message, 'err'); }
+  });
+}
+
+async function startAll() {
+  try {
+    const r = await api('POST', '/api/start_all');
+    toast(`已启动 ${r.started.length} 个账户`, 'ok');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+async function stopAll() {
+  try {
+    await api('POST', '/api/stop_all');
+    toast('已发送全部停止指令', 'info');
+  } catch(e) { toast(e.message, 'err'); }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Tasks
+// ═══════════════════════════════════════════════════════════
+async function doRefreshTasks() {
+  if (!selectedId) return;
+  const btn = document.getElementById('btn-refresh-task');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 查询中';
+  document.getElementById('task-raw').textContent = '正在查询…';
+  try {
+    const data = await api('GET', `/api/accounts/${selectedId}/tasks`);
+    renderTaskCards(data.tasks);
+    document.getElementById('task-raw').textContent = data.text || '无数据';
+  } catch(e) {
+    document.getElementById('task-raw').textContent = '查询失败: ' + e.message;
+    toast('任务查询失败: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span>刷新</span>';
+  }
+}
+
+function renderTaskCards(tasks) {
+  if (!tasks || tasks.length === 0) {
+    document.getElementById('task-grid').innerHTML =
+      '<div style="color:var(--text3);font-size:13px;grid-column:1/-1">暂无任务数据</div>';
+    document.getElementById('st-done').textContent = '0';
+    document.getElementById('st-prog').textContent = '0';
+    document.getElementById('st-total').textContent = '0';
+    document.getElementById('st-rate').textContent = '0%';
+    return;
+  }
+  const done  = tasks.filter(t => t.is_completed).length;
+  const total = tasks.length;
+  document.getElementById('st-done').textContent  = done;
+  document.getElementById('st-prog').textContent  = total - done;
+  document.getElementById('st-total').textContent = total;
+  document.getElementById('st-rate').textContent  = Math.round(done/total*100) + '%';
+
+  document.getElementById('task-grid').innerHTML = tasks.map(t => {
+    const pct = t.limit_value > 0 ? Math.round(Math.min(t.cur_value/t.limit_value,1)*100) : 0;
+    return `<div class="tc">
+      <div class="tc-name">${esc(t.task_name || t.task_id)}</div>
+      <div class="tc-bar"><div class="fill" style="width:${pct}%"></div></div>
+      <div class="tc-meta">
+        <span>${t.cur_value} / ${t.limit_value}</span>
+        <span class="${t.is_completed?'done':''}">${t.is_completed?'✓ 完成':pct+'%'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function doClaim() {
+  if (!selectedId) return;
+  const btn = document.getElementById('btn-claim');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const r = await api('POST', `/api/accounts/${selectedId}/claim_rewards`);
+    document.getElementById('task-raw').textContent = r.text;
+    toast('领取完成，查看原始输出', 'ok');
+  } catch(e) { toast('领取失败: ' + e.message, 'err'); }
+  finally { btn.disabled = false; btn.innerHTML = '领取奖励'; }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Logs
+// ═══════════════════════════════════════════════════════════
+function renderLogs() {
+  const acc = accounts[selectedId];
+  const wrap = document.getElementById('logwrap');
+  if (!acc || !(acc._logs?.length)) {
+    wrap.innerHTML = '<span style="color:var(--text3)">暂无日志，启动后将实时显示…</span>';
+    return;
+  }
+  wrap.innerHTML = acc._logs.slice(-800).map(formatLogLine).join('');
+  if (document.getElementById('autoscroll').checked) wrap.scrollTop = wrap.scrollHeight;
+}
+
+function appendLogs(entries) {
+  const wrap = document.getElementById('logwrap');
+  // Remove placeholder if present
+  if (wrap.children.length === 1 && wrap.children[0].tagName !== 'DIV') wrap.innerHTML = '';
+  entries.forEach(e => {
+    wrap.insertAdjacentHTML('beforeend', formatLogLine(e));
+  });
+  if (wrap.children.length > 1000) {
+    while (wrap.children.length > 800) wrap.removeChild(wrap.firstChild);
+  }
+  if (document.getElementById('autoscroll').checked) wrap.scrollTop = wrap.scrollHeight;
+}
+
+function formatLogLine(e) {
+  return `<div class="ll"><span class="lt">${esc(e.time)}</span><span class="lv ${esc(e.level)}">${esc(e.level)}</span><span class="lm">${esc(e.msg)}</span></div>`;
+}
+
+function clearLogs() {
+  if (!selectedId) return;
+  api('DELETE', `/api/accounts/${selectedId}/logs`).then(() => {
+    if (accounts[selectedId]) accounts[selectedId]._logs = [];
+    renderLogs();
+    toast('日志已清空', 'ok');
+  }).catch(e => toast(e.message, 'err'));
+}
+
+function exportLogs() {
+  const acc = accounts[selectedId];
+  if (!acc) return;
+  const lines = (acc._logs || []).map(e => `[${e.time}] [${e.level}] ${e.msg}`).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([lines], {type:'text/plain'}));
+  a.download = `bdm_${acc.name}_${new Date().toISOString().slice(0,10)}.log`;
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Add Account
+// ═══════════════════════════════════════════════════════════
+function openAddModal() { openModal('add-modal'); }
+
+async function submitAdd() {
+  const name   = getv('m-name');
+  const cookie = getv('m-cookie');
+  const rooms  = getv('m-rooms');
+  if (!name)   { flashErr('m-name');   return; }
+  if (!cookie) { flashErr('m-cookie'); return; }
+  if (!rooms)  { flashErr('m-rooms');  return; }
+
+  try {
+    const acc = await api('POST', '/api/accounts', {
+      name,
+      config: { cookie, room_ids: rooms, thread_count: 1,
+                reconnect_delay_seconds: 8, enable_web_heartbeat: true,
+                task_ids: '', task_query_interval_seconds: 30,
+                notify_urls: '', notify_on_task_complete: true, verbose: false },
+    });
+    accounts[acc.id] = acc;
+    acc._logs = [];
+    closeModal('add-modal');
+    openWS(acc.id);
+    renderSidebar();
+    selectAccount(acc.id);
+    toast('账户已添加', 'ok');
+  } catch(e) { toast('添加失败: ' + e.message, 'err'); }
+}
+
+function importCfg() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json';
+  inp.onchange = async e => {
+    const file = e.target.files[0]; if (!file) return;
+    try {
+      const data = JSON.parse(await file.text());
+      const acc = accounts[selectedId]; if (!acc) return;
+      const c = acc.config || {};
+      if (data.cookie)           c.cookie = data.cookie;
+      if (data.room_ids)         c.room_ids = Array.isArray(data.room_ids) ? data.room_ids.join(', ') : data.room_ids;
+      if (data.thread_count)     c.thread_count = data.thread_count;
+      if (data.reconnect_delay_seconds) c.reconnect_delay_seconds = data.reconnect_delay_seconds;
+      if (data.task_ids)         c.task_ids = Array.isArray(data.task_ids) ? data.task_ids.join(', ') : data.task_ids;
+      if (data.task_query_interval_seconds) c.task_query_interval_seconds = data.task_query_interval_seconds;
+      if (data.notify_urls)      c.notify_urls = Array.isArray(data.notify_urls) ? data.notify_urls.join(', ') : data.notify_urls;
+      if (typeof data.notify_on_task_complete==='boolean') c.notify_on_task_complete = data.notify_on_task_complete;
+      acc.config = c;
+      fillForm();
+      toast('配置已从文件导入，记得点「保存配置」', 'info');
+    } catch(err) { toast('解析失败: ' + err.message, 'err'); }
+  };
+  inp.click();
+}
+
+// ═══════════════════════════════════════════════════════════
+// Modal / Confirm / Toast
+// ═══════════════════════════════════════════════════════════
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function confirm_(msg, cb) {
+  document.getElementById('cm-msg').textContent = msg;
+  const btn = document.getElementById('cm-ok');
+  btn.onclick = () => { closeModal('confirm-modal'); cb(); };
+  openModal('confirm-modal');
+}
+
+function toast(msg, type='info', dur=3000) {
+  const wrap = document.getElementById('toast-wrap');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transform='translateY(8px)'; el.style.transition='.2s';
+    setTimeout(() => el.remove(), 220); }, dur);
+}
+
+function showEmpty() {
+  document.getElementById('empty').style.display = 'flex';
+  document.getElementById('tabs').style.display = 'none';
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+}
+
+// ═══════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════
+function esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function setv(id, v) { const el=document.getElementById(id); if(el) el.value = v??''; }
+function getv(id) { return (document.getElementById(id)?.value||'').trim(); }
+function chk(id, v) { const el=document.getElementById(id); if(el) el.checked = !!v; }
+function flashErr(id) {
+  const el = document.getElementById(id);
+  el.style.borderColor = 'var(--red)'; el.focus();
+  setTimeout(() => el.style.borderColor = '', 2500);
+}
+
+// ═══════════════════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════════════════
+init();
+</script>
+</body>
+</html>
