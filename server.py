@@ -275,6 +275,14 @@ def _miner_thread(account_id: str, event_loop: asyncio.AbstractEventLoop) -> Non
     # 将账户专属 logger 注入 miner（miner 再传给所有 X25KnWorker），
     # 无需操作任何全局 / 模块级 logger。
     miner = BilibiliWatchTimeMiner(config, logger=logger)
+
+    def handle_login(uid: int | None, uname: str):
+        acc.uid = uid
+        acc.uname = uname
+        asyncio.run_coroutine_threadsafe(broadcast_status(account_id), event_loop)
+
+    miner.on_login = handle_login
+
     acc._miner = miner
 
     try:

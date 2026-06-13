@@ -31,6 +31,7 @@ class BilibiliWatchTimeMiner:
         self._clients: list[BilibiliClient] = []
         self._clients_lock = threading.Lock()
         self._force_stop_requested = False
+        self.on_login = None
 
     def _build_session_plans(self) -> list[SessionPlan]:
         plans: list[SessionPlan] = []
@@ -134,6 +135,9 @@ class BilibiliWatchTimeMiner:
             self._logger.info("登录成功: %s (UID: %s)", uname, uid)
         else:
             self._logger.warning("Cookie 未登录，将以游客模式运行")
+        
+        if self.on_login:
+            self.on_login(uid, uname)
 
         plans = self._build_session_plans()
         self._logger.info(
