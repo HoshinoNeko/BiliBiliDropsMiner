@@ -166,7 +166,7 @@ input[type=number]::-webkit-inner-spin-button { opacity:.4; }
 .tgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:9px; }
 .tc { background:var(--surface2); border:1px solid var(--border); border-radius:var(--rs);
   padding:11px 13px; display:flex; flex-direction:column; gap:5px; }
-.tc-name { font-size:12px; font-weight:600; }
+.tc-name { font-size:12px; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .tc-bar { height:3px; background:var(--border); border-radius:2px; overflow:hidden; }
 .tc-bar .fill { height:100%; background:var(--pink); border-radius:2px; transition:width .4s; }
 .tc-meta { display:flex; justify-content:space-between; }
