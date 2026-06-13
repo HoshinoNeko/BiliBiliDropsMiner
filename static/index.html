@@ -176,7 +176,8 @@ input[type=number]::-webkit-inner-spin-button { opacity:.4; }
 /* ── Log ── */
 .logwrap { background:#080a0f; border:1px solid var(--border); border-radius:var(--rs);
   font-family:var(--font-mono); font-size:12px; line-height:1.65;
-  overflow-y:auto; padding:10px 13px; min-height:160px; max-height:420px; white-space: pre-wrap; }
+  overflow-y:auto; padding:10px 13px; min-height:160px; max-height:420px;
+  white-space: pre-wrap; }
 .ll { display:flex; gap:9px; }
 .lt { color:var(--text3); flex-shrink:0; }
 .lv { flex-shrink:0; font-weight:700; min-width:42px; text-align:right; }
@@ -631,6 +632,7 @@ function selectAccount(id) {
   renderSidebar();
   fillForm();
   updateActionBar();
+  // switchTab 内部会处理 tasks tab 的自动刷新
   switchTab(document.querySelector(`.tab[data-tab="${activeTab}"]`), false);
   renderLogs();
 }
@@ -646,6 +648,8 @@ function switchTab(el, save=true) {
   document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
   const panel = document.getElementById('tab-' + tab);
   if (panel) panel.style.display = 'flex';
+  // 切换到任务进度 tab 时自动刷新
+  if (tab === 'tasks' && selectedId) doRefreshTasks();
 }
 
 // ═══════════════════════════════════════════════════════════

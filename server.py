@@ -246,23 +246,20 @@ def _build_miner_config(cfg: dict) -> MinerConfig:
 
 
 def _miner_thread(account_id: str, event_loop: asyncio.AbstractEventLoop) -> None:
-    """在独立系统线程内运行 miner，日志通过账户 logger 捕获后异步广播"""
+    """在独立系统线程内运行 miner。
+
+    每个账户拥有独立的 Logger 实例（名称为 bdm.<account_id>），
+    通过 AccountQueueHandler 将日志写入该账户专属的 queue。
+    BilibiliWatchTimeMiner 和 X25KnWorker 接受 logger 参数直接使用，
+    完全不触碰全局 bilibili_drops_miner logger，彻底消除跨账户日志混流。
+    """
     acc = accounts.get(account_id)
     if acc is None:
         return
 
     verbose = bool(acc.config.get("verbose", False))
+    # 为本账户创建隔离 logger，propagate=False，不向任何父 logger 传播
     logger = make_account_logger(account_id, acc._log_queue, verbose)
-    acc._log_handler = logger.handlers[0] if logger.handlers else None
-
-    # 将 bilibili_drops_miner 各模块的日志重定向到该账户 logger
-    # 方法：临时 monkeypatch root logger + 为 bilibili_drops_miner 挂专属 handler
-    bdm_logger = logging.getLogger("bilibili_drops_miner")
-    bdm_logger.propagate = False
-    for h in bdm_logger.handlers[:]:
-        bdm_logger.removeHandler(h)
-    bdm_logger.addHandler(acc._log_handler)
-    bdm_logger.setLevel(logging.DEBUG if verbose else logging.INFO)
 
     try:
         config = _build_miner_config(acc.config)
@@ -273,27 +270,11 @@ def _miner_thread(account_id: str, event_loop: asyncio.AbstractEventLoop) -> Non
         asyncio.run_coroutine_threadsafe(broadcast_status(account_id), event_loop)
         return
 
-    # 探测登录信息
-    try:
-        async def _probe():
-            client = BilibiliClient(config.cookie)
-            try:
-                return await client.get_self_info()
-            finally:
-                await client.close()
-        uid, uname = asyncio.run(_probe())
-        acc.uid = uid
-        acc.uname = uname
-        if uid:
-            logger.info("登录成功: %s (UID: %s)", uname, uid)
-        else:
-            logger.warning("Cookie 未登录，将以游客模式运行")
-    except Exception as exc:
-        logger.warning("登录探测失败: %s", exc)
-
     asyncio.run_coroutine_threadsafe(broadcast_status(account_id), event_loop)
 
-    miner = BilibiliWatchTimeMiner(config)
+    # 将账户专属 logger 注入 miner（miner 再传给所有 X25KnWorker），
+    # 无需操作任何全局 / 模块级 logger。
+    miner = BilibiliWatchTimeMiner(config, logger=logger)
     acc._miner = miner
 
     try:
@@ -307,8 +288,6 @@ def _miner_thread(account_id: str, event_loop: asyncio.AbstractEventLoop) -> Non
         acc._thread = None
         if acc.status == "running":
             acc.status = "stopped"
-        # 清理 bdm logger handler，防止下次启动重复挂载
-        bdm_logger.removeHandler(acc._log_handler)
         asyncio.run_coroutine_threadsafe(broadcast_status(account_id), event_loop)
 
 

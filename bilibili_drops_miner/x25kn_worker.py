@@ -26,6 +26,7 @@ class X25KnWorker:
         session_id: str = "",
         primary_session: bool = True,
         stop_event: asyncio.Event | None = None,
+        logger: logging.Logger | None = None,
     ) -> None:
         self.client = client
         self.notifier = notifier
@@ -35,6 +36,7 @@ class X25KnWorker:
         self.session_id = session_id
         self.primary_session = primary_session
         self._stop_event = stop_event or asyncio.Event()
+        self._logger = logger or LOGGER
 
     @property
     def _ctx(self) -> str:
@@ -44,17 +46,17 @@ class X25KnWorker:
 
     def _log_info(self, message: str, *args: Any, primary_only: bool = False) -> None:
         if primary_only and not self.primary_session:
-            LOGGER.debug(message, *args)
+            self._logger.debug(message, *args)
             return
-        LOGGER.info(message, *args)
+        self._logger.info(message, *args)
 
     def _log_warning(
         self, message: str, *args: Any, primary_only: bool = False
     ) -> None:
         if primary_only and not self.primary_session:
-            LOGGER.debug(message, *args)
+            self._logger.debug(message, *args)
             return
-        LOGGER.warning(message, *args)
+        self._logger.warning(message, *args)
 
     async def stop(self) -> None:
         self._stop_event.set()
@@ -135,7 +137,7 @@ class X25KnWorker:
                 else:
                     session = await self.client.live_trace_heartbeat(session)
                     wait_seconds = max(5, int(session.heartbeat_interval))
-                    LOGGER.debug(
+                    self._logger.debug(
                         "%s x25Kn heartbeat success seq=%s ets=%s interval=%s",
                         self._ctx,
                         session.seq_id,
@@ -178,7 +180,7 @@ class X25KnWorker:
             try:
                 progresses = await self.client.get_task_progress(task_ids)
                 if not progresses:
-                    LOGGER.warning("未获取到任务进度，请检查任务 ID 是否正确")
+                    self._logger.warning("未获取到任务进度，请检查任务 ID 是否正确")
                 else:
                     for task in progresses:
                         key = task.task_id
@@ -210,7 +212,7 @@ class X25KnWorker:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                LOGGER.debug("查询任务进度失败: %s", exc)
+                self._logger.debug("查询任务进度失败: %s", exc)
                 wait_seconds = max(10, self.config.reconnect_delay_seconds)
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=wait_seconds)
