@@ -650,6 +650,7 @@ function switchTab(el, save=true) {
   if (panel) panel.style.display = 'flex';
   // 切换到任务进度 tab 时自动刷新
   if (tab === 'tasks' && selectedId) doRefreshTasks();
+  if (tab === 'logs' && selectedId) renderLogs();
 }
 
 // ═══════════════════════════════════════════════════════════
