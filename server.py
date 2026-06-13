@@ -275,14 +275,13 @@ def _miner_thread(account_id: str, event_loop: asyncio.AbstractEventLoop) -> Non
     # 将账户专属 logger 注入 miner（miner 再传给所有 X25KnWorker），
     # 无需操作任何全局 / 模块级 logger。
     miner = BilibiliWatchTimeMiner(config, logger=logger)
-
+    acc._miner = miner
     def handle_login(uid: int | None, uname: str):
         acc.uid = uid
         acc.uname = uname
+        # 立即通知前端更新 UI
         asyncio.run_coroutine_threadsafe(broadcast_status(account_id), event_loop)
-
     miner.on_login = handle_login
-
     acc._miner = miner
 
     try:
@@ -292,10 +291,13 @@ def _miner_thread(account_id: str, event_loop: asyncio.AbstractEventLoop) -> Non
         logger.error("掉宝助手异常退出: %s", exc)
         acc.status = "error"
     finally:
-        acc._miner = None
-        acc._thread = None
-        if acc.status == "running":
-            acc.status = "stopped"
+        if acc._miner is miner:
+            acc._miner = None
+        if acc._thread is threading.current_thread():
+            acc._thread = None
+
+        acc.status = "stopped"
+
         asyncio.run_coroutine_threadsafe(broadcast_status(account_id), event_loop)
 
 
@@ -324,13 +326,16 @@ def stop_account(account_id: str) -> None:
             acc.status = "stopped"
             acc._thread = None
         return
+
+    acc.status = "stopping"
+    miner_to_stop = acc._miner
+
     acc._miner.stop(force=False)
     # 给 2 秒后强制停止
-    def _force():
+    def _force(m):
         time.sleep(2.5)
-        if acc._miner is not None:
-            acc._miner.stop(force=True)
-    threading.Thread(target=_force, daemon=True).start()
+        m.stop(force=True)
+    threading.Thread(target=_force, args=(miner_to_stop,), daemon=True).start()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -470,10 +475,16 @@ async def delete_account(account_id: str):
 @app.post("/api/accounts/{account_id}/start")
 async def api_start(account_id: str):
     acc = get_account(account_id)
+
     if acc.status == "running":
         return {"ok": False, "message": "已在运行中"}
+
+    if acc.status == "stopping" or (acc._thread and acc._thread.is_alive()):
+        return {"ok": False, "message": "正在停止中，请稍候再试"}
+
     if not _main_loop:
         raise HTTPException(500, "事件循环未就绪")
+
     start_account(account_id, _main_loop)
     await broadcast_status(account_id)
     return {"ok": True}
@@ -483,7 +494,7 @@ async def api_start(account_id: str):
 async def api_stop(account_id: str):
     acc = get_account(account_id)
     stop_account(account_id)
-    acc.status = "stopped"
+    # acc.status = "stopped"
     await broadcast_status(account_id)
     return {"ok": True}
 
